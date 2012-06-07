@@ -1,130 +1,32 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl Bio-Draw-FeatureStack.t'
-
-#########################
-
-# change 'tests => 1' to 'tests => last_test_to_print';
-
-use Test::More tests => 1;
-BEGIN { use_ok('Bio::Draw::FeatureStack') };
-
-#########################
-
 use strict;
 use warnings;
+use Test::More tests => 5;
+use Test::Exception;
 
-use lib "$ENV{HOME}/perl";
-use ChenLab::Constants;
-use ChenLab::DB::DataProvider;
-use ChenLab::DB::DataProviderBundle;
-use ChenLab::DB::DataProviderFasta;
-use ChenLab::DB::Util;
-use ChenLab::GFC::WebPageWriter;
-use Bio::Draw::FeatureStack;
-use Bio::DB::GFF;
-use Bio::Graphics;
-use Bio::SeqIO;
-use Bio::SeqFeature::Generic;
-use Data::Dumper;
-use ChenLab::GFC::WebPageWriter;
-use File::Basename;
-use Bio::Graphics::Glyph::decorated_transcript 0.10;
+BEGIN { 
+	use_ok('Bio::Draw::FeatureStack'); 
+	use_ok('Bio::DB::SeqFeature::Store'); 
+	use_ok('Bio::Graphics::Glyph::decorated_gene'); 
+	use_ok('Bio::Graphics::Glyph::decorated_transcript', 0.10); 
+	use_ok('Bio::Graphics'); 
+	use_ok('File::Basename'); 
+};
 
-use constant DEBUG => 1;
+my $gff = 'data/gene_models.gff3';
 
-my $dp_cele = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => 'data/gene_models.gff3/home/cfa24/scripts_data/feature_stack/gff/c_elegans.WS231.gff3.annotated',
-	-default_track => 'Coding_transcript',
-	-species_long_name => Constants::SPECIES_LONG_NAME_CELE,
-	-species_short_name =>  Constants::SPECIES_NAME_CELE
-);
-my $dp_cbri = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/c_briggsae.WS231.gff3.annotated',
-	-default_track => 'curated',
-	-species_long_name => Constants::SPECIES_LONG_NAME_CBRI,
-	-species_short_name =>  Constants::SPECIES_NAME_CBRI
-);
-my $dp_human = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/Homo_sapiens.GRCh37.66.gff3.annotated',
-	-default_track => 'protein_coding',
-	-species_long_name => Constants::SPECIES_LONG_NAME_HSAP,
-	-species_short_name =>  Constants::SPECIES_NAME_HSAP
-);
-my $dp_dmel = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/Drosophila_melanogaster.BDGP5.66.gff3.annotated',
-	-default_track => 'protein_coding',
-	-species_long_name => Constants::SPECIES_LONG_NAME_DMEL,
-	-species_short_name =>  Constants::SPECIES_NAME_DMEL
-);
-my $dp_scer = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/saccharomyces_cerevisiae.gff3.annotated',
-	-default_track => 'SGD',
-	-species_long_name => Constants::SPECIES_LONG_NAME_SCER,
-	-species_short_name =>  Constants::SPECIES_NAME_SCER
-);
-my $dp_acas = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/Acanthamoeba_castellani.gff3.annotated',
-	-default_track => 'TIGR',
-	-species_long_name => Constants::SPECIES_LONG_NAME_ACAS,
-	-species_short_name =>  Constants::SPECIES_NAME_ACAS
-);
-my $dp_amac = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/allomyces_macrogynus_atcc_38327_3_transcripts.gff3.annotated',
-	-default_track => 'A_macrogynus_V3_CALLGENES_FINAL_2',
-	-species_long_name => Constants::SPECIES_LONG_NAME_AMAC,
-	-species_short_name =>  Constants::SPECIES_NAME_AMAC
-);
-my $dp_mbre = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/Monbr1_best_models.gff3.annotated',
-	-default_track => 'JGI',
-	-species_long_name => Constants::SPECIES_LONG_NAME_MBRE,
-	-species_short_name =>  Constants::SPECIES_NAME_MBRE
-);
+lives_ok { figure1() }  'Generation of manuscript figure 1';
+lives_ok { figure2() }  'Generation of manuscript figure 2';
 
-my $dp_nematode = new ChenLab::DB::DataProvider
-(
-	-adaptor => 'memory', 
-	-dsn => '/home/cfa24/scripts_data/feature_stack/gff/nematode.RNApol2genes.gff3.annotated',
-	-default_track => 'Coding_transcript',
-	-species_long_name => 'Nematodes'
-);
-
-
-my $dpb = new ChenLab::DB::DataProviderBundle(-data_providers => [$dp_cele, $dp_cbri, $dp_human, $dp_dmel, $dp_scer, $dp_acas, $dp_amac, $dp_mbre, $dp_nematode]);
-
-t1();
-t2();
-
-sub render_figure_1
+sub figure1
 {
-	my %param = @_;
-	my $output_basename = "figure1";
+	my $output_basename = "images/t1/figure1";
 
 	my @gene_names = (qw (RFX3 RFX2 RFX1 dRFX ceDAF-19 Cbr-daf-19 cRFX1 RFX4 RFX6 cRFX2 RFX8 ACA1_270030 YLR176C RFX5 RFX7 dRFX1 AMAG_11601));
-	my @features = load_features(\@gene_names);
 	#my @gene_names = (qw (dRFX dRFX1 ceDAF-19 YLR176C ACA1_270030 AMAG_10999 AMAG_11601 cRFX1 cRFX2));
 	#my @gene_names = (qw (ceDAF-19));
 	#my @gene_names = (qw (YLR176C));
+	my @features = load_features(\@gene_names);
 
-	
-	Log::log("render(): Initializing FeatureStack...") if (DEBUG);
-	
 	my $feature_stack = new Bio::Draw::FeatureStack
 	(
 		-features => \@features,
@@ -136,8 +38,8 @@ sub render_figure_1
 							-pad_left => 80,
 							-pad_right => 20
 		},
-		-intron_size => 1,
-		-verbose => DEBUG,
+		-intron_size => 50,
+		-verbose => 1,
 		-feature_offsets => "DBD",
 #		-feature_offsets => {
 #			'daf-19' => 800,
@@ -164,62 +66,39 @@ sub render_figure_1
 							-fontcolor   => 'black',
 							-font2color  => 'blue',
 							-utr_color   => 'white',
-							-bump        =>  +1,
+							-pad_bottom  => 5,
 							-height      =>  12,
 							-label_position => 'left',
 							-label_transcripts => 1,
-							-label => \&get_gene_label, #1, #$gene_models_visible ? \&get_feature_name : 0,
-							-description => 0, #$gene_models_visible ? sub { Util::getGeneDescription($_[0]) || "n/a" } : " ",
+							-label => \&get_gene_label,
+							-description => 0,
 							-decoration_position => \&get_decoration_position,
-							-decoration_color => \&get_color_for_decoration,
+							-decoration_color => \&get_decoration_color,
 							-decoration_label => \&get_decoration_label,
-							-decoration_label_color => "black", #\&get_label_color_for_decoration,
+							-decoration_label_color => "black",
 							-decoration_visible => \&is_decoration_visible,
 							-decoration_border => \&get_decoration_border,
 							-decoration_level => \&get_decoration_level,
 							-decoration_label_position => \&get_decoration_label_position,
 							-decoration_height => \&get_decoration_height,
-							-additional_decorations => \&get_additional_decorations,
-#							-sorted_decorations => \&get_sorted_decorations,
-							-box_subparts => 3,
+							-box_subparts => 3, # to create image maps for transcript decorations
 							-title => '$name', # \&ChenLab::GFC::WebPageWriter::get_decoration_title,
-							-link => \&ChenLab::GFC::WebPageWriter::get_decoration_link
+							-link => " " # you could eg. link to Pfam URL here...
 						 }
 	);
-	
-	# write PNG
-	my ($png, $map) = $feature_stack->svg(-image_map => 1);
-	my $output_file = $output_basename.".svg";
-	open(IMG,">$output_file") or Bio::Root::Exception("could not write to file $output_file");
-	print IMG $png;
-	close(IMG);
-	Log::log("Stacked feature image successfully written to $output_file.");
-	
-	# write HTML (including image map)	
-	my $img_file_base = basename($output_file);
-	my $html_file =  $output_basename.".html";
-	open(HTML, ">$html_file") or Bio::Root::Exception("could not write to file $html_file");
-	print HTML "<html>\n<body>\n";
-	print HTML "<img src=\"$img_file_base\" usemap=\"#map\" />\n";
-	print HTML "$map";
-	print HTML "</body>\n</html>\n";
-	close(HTML);
 
-	Log::log("HTML file written to $html_file");	
+	write_output_files($feature_stack, $output_basename);
 }
 
-sub render_figure_2
+sub figure2
 {
-	my %param = @_;
-	my $output_basename = "figure2";
+	my $output_basename = "images/t1/figure2";
 	
-#	my @gene_names = (qw (che-13 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nphp-4 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 che-12 dyf-5));
 	my @gene_names = (qw (ceDAF-19 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 dyf-5));
+#	my @gene_names = (qw (che-13 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nphp-4 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 che-12 dyf-5));
 #	my @gene_names = (qw (xbx-1 dylt-2 xbx-3 xbx-4 mks-1 bbs-9 osm-5 nhr-44 dyf-5));
 	my @features = load_features(\@gene_names);
 
-	Log::log("render(): Initializing FeatureStack...") if (DEBUG);
-	
 	my $feature_stack = new Bio::Draw::FeatureStack
 	(
 		-features => \@features,
@@ -232,48 +111,31 @@ sub render_figure_2
 									Transcript:C04C3.5b Transcript:C04C3.5c
 									Transcript:F38G1.1.2
 									Transcript:ZK520.3b.1 Transcript:ZK520.3b.2)],
-		-alt_feature_type => 'xbox:Coding_transcript',
+		-alt_feature_type => 'xbox:test',  # specifiy feature types that should be drawn in alternative track alongside gene models; could also be SNPs, indels, etc.
 		-flip_minus => 1,
 		-ignore_utr => 1,
 		-panel_params => {
 							-width => 1024,
-							-pad_left => 170,
+							-pad_left => 180,
 							-pad_right => 20,
 							-grid => 1							
 		},
-		-span => 800,
-		-separator => 0,
-#		-intron_size => 50,
-		-verbose => DEBUG,
+		-span => 800,  # clips 3' end of gene models
+		-verbose => 1,
 		-feature_offsets => 'start_codon',
-		-glyph => 'decorated_gene',
+		-glyph => 'gene',  # use traditional gene glyph, we do not need transcript decorations for this image
 		-glyph_params => {
 							-bgcolor     => 'lightgrey',
 							-fgcolor     => 'black',
 							-fontcolor   => 'black',
 							-font2color  => 'blue',
 							-utr_color   => 'white',
-							-bump        =>  +1,
 							-height      =>  10,
 							-label_position => 'left',
 							-label_transcripts => 1,
 							-pad_left => 200,
-							-label => sub { my $f = shift; $f->primary_tag eq 'mRNA' ? $f->name : 0 }, #\&get_gene_label, #1, #$gene_models_visible ? \&get_feature_name : 0,
-							-description => 0, #$gene_models_visible ? sub { Util::getGeneDescription($_[0]) || "n/a" } : " ",
-							-decoration_position => \&get_decoration_position,
-							-decoration_color => \&get_color_for_decoration,
-							-decoration_label => \&get_decoration_label,
-							-decoration_label_color => "black", #\&get_label_color_for_decoration,
-							-decoration_visible => 0,
-							-decoration_border => \&get_decoration_border,
-							-decoration_level => 0, #\&get_decoration_level,
-							-decoration_label_position => \&get_decoration_label_position,
-							-decoration_height => \&get_decoration_height,
-							-additional_decorations => \&get_additional_decorations,
-#							-sorted_decorations => \&get_sorted_decorations,
-							-box_subparts => 3,
-							-title => '$name', # \&ChenLab::GFC::WebPageWriter::get_decoration_title,
-							-link => \&ChenLab::GFC::WebPageWriter::get_decoration_link
+							-label => sub { my $f = shift; $f->primary_tag eq 'mRNA' ? $f->name : 0 },
+							-description => 0 
 						 },
 		-alt_glyph => 'generic', 
 		-alt_glyph_params => {
@@ -289,25 +151,108 @@ sub render_figure_2
 						 }
 	);
 	
-	# write PNG
-	my ($png, $map) = $feature_stack->svg(-image_map => 1);
-	my $output_file = $output_basename.".svg";
-	open(IMG,">$output_file") or Bio::Root::Exception("could not write to file $output_file");
-	print IMG $png;
-	close(IMG);
-	Log::log("Stacked feature image successfully written to $output_file.");
-	
-	# write HTML (including image map)	
-	my $img_file_base = basename($output_file);
-	my $html_file =  $output_basename.".html";
-	open(HTML, ">$html_file") or Bio::Root::Exception("could not write to file $html_file");
-	print HTML "<html>\n<body>\n";
-	print HTML "<img src=\"$img_file_base\" usemap=\"#map\" />\n";
-	print HTML "$map";
-	print HTML "</body>\n</html>\n";
-	close(HTML);
+	write_output_files($feature_stack, $output_basename);
+}
 
-	Log::log("HTML file written to $html_file");	
+#--------------------------
+# helper functions
+#--------------------------
+
+sub load_features
+{
+	my $gene_names = shift;
+	
+	my $store = Bio::DB::SeqFeature::Store->new
+	(
+	   	-adaptor => 'memory',
+		-dsn => $gff 
+	);    						
+
+	my @features;
+	foreach my $name (@$gene_names)
+	{
+		my ($f) = $store->features(-name => $name, -aliases => 1, -type => "gene:test");
+		if (!defined $f)
+		{
+			die "could not load feature $name from gff file $gff";
+			return ();
+		}
+		
+		push(@features, $f);	
+	}
+	
+	return @features;
+}
+
+sub write_output_files
+{
+	my $feature_stack = shift;
+	my $output_basename = shift;
+	
+	my ($svg_file, $map);	
+	
+	# SVG output
+	{
+		(my $svg, $map) = $feature_stack->svg(-image_map => 1);
+
+		ok ($svg, "SVG $output_basename" );
+		ok ($map, "image map $output_basename");
+		
+		$svg_file = $output_basename.".svg";
+		system("rm $svg_file") if (-e $svg_file);
+		open(IMG,">$svg_file") or die "could not write to file $svg_file";
+		print IMG $svg;
+		close(IMG);		
+
+		ok (-e $svg_file, "$svg_file" );
+	}
+
+	# PNG output
+	{
+		my $png = $feature_stack->png;
+		ok ($png, "PNG $output_basename" );
+		
+		my $png_file = $output_basename.".png";
+		system("rm $png_file") if (-e $png_file);
+		open(IMG,">$png_file") or die "could not write to file $png_file";
+		print IMG $png;
+		close(IMG);		
+
+		ok (-e $png_file, "$png_file" );
+	}
+
+	# HTML including image map
+	{
+		my $img_file_base = basename($svg_file);
+		my $html_file =  $output_basename.".html";
+
+		system("rm $html_file") if (-e $html_file);
+		open(HTML, ">$html_file") or Bio::Root::Exception("could not write to file $html_file");
+		print HTML "<html>\n<body>\n";
+		print HTML "<img src=\"$img_file_base\" usemap=\"#map\" />\n";
+		print HTML "$map";
+		print HTML "</body>\n</html>\n";
+		close(HTML);
+	
+		ok (-e $html_file, "$html_file" );		
+	}			
+}
+
+#--------------------------
+# glyph callback functions
+#--------------------------
+
+sub is_decoration_visible
+{
+	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
+
+	my $h = $glyph->active_decoration;
+	my ($type, $name, $start, $end, $score) = ($h->type, $h->name, $h->start, $h->end, $h->score);
+
+	return 0 if ("$name" eq "RFX_DNA_binding");  # do not show Pfam prediction for the DBD domain, because we annotated it using our own alignment
+#	return 0 if ("$name" eq "RFX1_trans_act");
+	
+	return 1;
 }
 
 sub get_gene_label
@@ -324,7 +269,7 @@ sub get_xbox_label
 	my $feature = shift;
 	my ($seq,$len,$score) = $feature->desc =~ /(.*)-Length:(.*)-Score:(.*)/; 
 	my ($dist) = $feature->get_tag_values('start_dist');  # dynamically computed by FeatureStack; no need to set in GFF file
-	return $seq."(".$dist."bp;".$score.")";
+	return $seq."(".$dist."bp, ".$score.")";
 }
 
 sub get_decoration_level
@@ -338,30 +283,7 @@ sub get_decoration_level
 	return "CDS";
 }
 
-sub get_additional_decorations
-{
-	my $feature = shift;	
-	my %additional_decorations =
-	(
-#		"MAL7P1.59" => "test:test:24:24:0",
-	);
-	
-	my $feature_id = get_feature_name($feature);
-	$feature_id =~ s/rna_//;
-	$feature_id =~ s/-1$//;
-	
-	my $add_decorations = $additional_decorations{$feature_id};
-	
-#	if ($hmmer{$feature_id})
-#	{
-#		$add_decorations .= "," if ($add_decorations);
-#		$add_decorations .= $hmmer{$feature_id};
-#	}
-	
-	return $add_decorations;
-}
-
-sub get_color_for_decoration
+sub get_decoration_color
 {
 	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
 	my $h = $glyph->active_decoration;
@@ -430,8 +352,6 @@ sub get_decoration_height
 
 	return 5 if ("$type:$name" eq "hmmer3:Pox_D5");
 	return 6 if ("$type:$name" =~ /hmmer3:[ABCD]-domain/);
-#	return 2 if ("$type:$name" eq "hmmer3:BCD-domain");
-#	return 10;
 }
 
 sub get_decoration_position
@@ -445,10 +365,6 @@ sub get_decoration_position
 	{
 		return 14;
 	}
-#	if ("$type:$name" eq "hmmer3:BCD-domain")
-#	{
-#		return 5;
-#	}
 
 	return "inside";
 }
@@ -472,7 +388,7 @@ sub get_decoration_label
 	my $h = $glyph->active_decoration;
 	my ($type, $name) = ($h->type, $h->name);
 
-	return 0 if ("$type:$name" eq "hmmer3:DBD");
+	return 0 if ("$type:$name" eq "hmmer3:DBD"); # do not label this decoration
 	return "A" if ("$type:$name" eq "hmmer3:A-domain");
 	return "B" if ("$type:$name" eq "hmmer3:B-domain");
 	return "C" if ("$type:$name" eq "hmmer3:C-domain");
@@ -482,95 +398,3 @@ sub get_decoration_label
 	return 0 if ("$type:$name" eq "hmmer3:Pox_D5");
 	
 }
-
-sub get_label_color_for_decoration
-{
-	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
-
-	my $h = $glyph->active_decoration;
-	my ($type, $name) = ($h->type, $h->name);
-
-	my %decoration_label_colors =
-	(
-		'SP' => 'black',
-		'TM' => 'white',
-		'VTS' => 'white',
-		'Phobius:TM' => 'white'
-	);	
-		
-	return $decoration_label_colors{"$type:$name"} 
-		if (exists $decoration_label_colors{"$type:$name"});
-
-	return $decoration_label_colors{$name} 
-		if (exists $decoration_label_colors{$name});
-
-	return $decoration_label_colors{$type} 
-		if (exists $decoration_label_colors{$type});
-}
-
-sub is_decoration_visible
-{
-	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
-
-	my $h = $glyph->active_decoration;
-	my ($type, $name, $start, $end, $score) = ($h->type, $h->name, $h->start, $h->end, $h->score);
-
-	return 0 if ("$name" eq "RFX_DNA_binding");
-#	return 0 if ("$name" eq "RFX1_trans_act");
-	
-	return 1;
-}
-
-sub get_sorted_decorations
-{
-	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
-
-	my @sorted_decorations = sort { $a->length <=> $b->length } (@{$glyph->mapped_decorations});
-	return \@sorted_decorations;
-}
-
-sub get_feature_name {
-	my $feature = shift;
-
-	my $name = Util::getFeatureName($feature);
-	$name = Util::getFeatureName(($feature->get_SeqFeatures)[0]) if (!$name and $feature->get_SeqFeatures);
-	if (defined $name)
-	{
-		$name = $3 if ($name =~ /^(m?(RNA|CDS)_)?(.*?)(-\d+)?$/i);		
-	}
-	else
-	{
-		$name = "";	
-	}
-
-	return $name;
-}
-
-sub add_species_prefix
-{
-	my $id = shift;
-	return "$id";
-}
-
-sub load_features
-{
-	my $gene_names = shift;
-
-	my @features;
-	foreach my $name (@$gene_names)
-	{
-		if (!defined $name)
-		{
-			push(@features, undef);
-			next;
-		}
-		
-		my $f = $dpb->containsFeature($name);
-		die "feature $name not found in data provider. Skipped\n" if (!$f);
-		push(@features, $f);	
-	}
-	
-	return @features;
-}
-
-

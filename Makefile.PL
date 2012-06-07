@@ -5,8 +5,8 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'Bio::Draw::FeatureStack',
     VERSION_FROM      => 'lib/Bio/Draw/FeatureStack.pm', # finds $VERSION
-    PREREQ_PM         => {}, # e.g., Module::Name => 1.1
+    PREREQ_PM         => { Bio::Graphics => 2.28, Bio::Graphics::Glyph::DecoratedGene => 0 }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Bio/Draw/FeatureStack.pm', # retrieve abstract from module
-       AUTHOR         => 'A. U. Thor <cfa24@localdomain>') : ()),
+       AUTHOR         => 'Christian Frech <frech.christian@gmail.com>') : ()),
 );
