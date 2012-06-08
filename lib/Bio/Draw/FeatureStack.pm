@@ -107,19 +107,6 @@ sub new
 	return bless($self, $class);
 }
 
-=head2 png
-
- Title   : png
- Usage   : $png = $feature_stack->png()
-           OR
-           ($png, $map) = $feature_stack->png(-image_map => 1)
- Function: Render image in PNG format.
- Returns : Image in PNG format. Optionally, an HTML image map for the
-           rendered image is returned as second parameter.
- Args    : -image_map => return image map (true/false) 
-
-=cut
-
 sub png
 {
 	my $self = shift;
@@ -146,19 +133,6 @@ sub png
 	$panel->finished();
 	return $png;
 }
-
-=head2 svg
-
- Title   : svg
- Usage   : $svg = $feature_stack->svg()
- 		   OR 
-           ($svg, $map) = $feature_stack->svg(-image_map => 1)
- Function: Render image in SVG format (scalable vectorized image)
- Returns : Image in SVG format. Optionally, an HTML image map for the
-           rendered image is returned as second parameter.
- Args    : -image_map => return image map (true/false) 
-
-=cut
 
 sub svg
 {
