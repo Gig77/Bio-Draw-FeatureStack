@@ -4,27 +4,6 @@ use 5.008008;
 use strict;
 use warnings;
 
-#require Exporter;
-
-#our @ISA = qw(Exporter);
-
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-
-# This allows declaration	use Bio::Draw::FeatureStack ':all';
-# If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
-# will save memory.
-#our %EXPORT_TAGS = ( 'all' => [ qw(
-#	
-#) ] );
-#
-#our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
-#
-#our @EXPORT = qw(
-#	
-#);
-
 our $VERSION = '0.01';
 
 use Bio::Graphics::Feature;
@@ -33,15 +12,13 @@ use List::Util qw[min max];
 
 use base qw(Bio::Root::Root);
 
-use constant DEBUG => 0;
-
 sub new
 {
     my ($class, @args) = @_;
     my $self = $class->SUPER::new(@args);
 	    
 	my %param = @args;
-	my $features = $param{'-features'} or throw Bio::Root::BadParameter("gene models not specified");  # Bio::DB::SeqFeature array ref
+	my $features = $param{'-features'} or throw Bio::Root::BadParameter("gene models not specified");  # BioPerl feature array ref
 	my $transcripts_to_skip = $param{'-transcripts_to_skip'}; # optional
 	my $alt_feature_type = $param{'-alt_feature_type'}; # optional
 	my $glyph = defined $param{'-glyph'} ? $param{'-glyph'} : "generic";
@@ -52,7 +29,7 @@ sub new
 	my $ignore_utr = $param{'-ignore_utr'};
 	my $separator = $param{'-separator'};
 	my $intron_size = $param{'-intron_size'};
-	my $flip_minus = $param{'-flip_minus'};
+	my $flip_minus = defined $param{'-flip_minus'} ? $param{'-flip_minus'} : 1;
 	my $feature_offsets = $param{'-feature_offsets'};
 	my $ruler = defined $param{'-ruler'} ? $param{'-ruler'} : 1;
 	my $span = $param{'-span'}; # optional
@@ -89,35 +66,31 @@ sub new
 	$self->{'panel_param_array'} = \@panel_params;
 
 	# feature transformation: adjust intron sizes, remove UTRs, flip if on negative strand, remove unwanted transcripts (isoforms)
-	my @f = @$features;
-	if ($ignore_utr or (defined $intron_size and $intron_size > 1))
+	my @transformed_features;
+	foreach my $feature (@{$features})
 	{
-		my @transformed_features;
-		foreach my $feature (@{$features})
-		{
-			$self->throw("feature undefined") if (!defined $feature);
-			my $transformed = $self->_transform_feature($feature);
-			push(@transformed_features, $transformed);
-		}
-		@f = @transformed_features;
+		$self->throw("feature undefined") if (!defined $feature);
+		my $transformed = $self->_transform_feature($feature);
+		push(@transformed_features, $transformed);
 	}
 
 	# calculate feature offsets if not left-aligned
-	$self->_calc_feature_offsets(\@f, $feature_offsets)
+	$self->_calc_feature_offsets(\@transformed_features, $feature_offsets)
 		if (defined $feature_offsets);
 			
 	# determine coordinate span
-	$span = $self->_calc_feature_span(\@f)
+	$span = $self->_calc_feature_span(\@transformed_features)
 		if (!defined $self->{'span'}); 
 	
 	# align features
 	my @aligned_features;
-	for (my $i = 0; $i < @f; $i ++)
+	for (my $i = 0; $i < @transformed_features; $i ++)
 	{
-		my $feature = $f[$i];
+		my $feature = $transformed_features[$i];
 		
-		my $offset = (defined $self->{'feature_offsets'} and exists $self->{'feature_offsets'}->{$feature->id}) ? $self->{'feature_offsets'}->{$feature->id} : 0;
-		print $feature->id.": feature offset=$offset\n" if ($offset and DEBUG);
+		my $fid = _get_id($feature);
+		my $offset = (defined $self->{'feature_offsets'} and exists $self->{'feature_offsets'}->{$fid}) ? $self->{'feature_offsets'}->{$fid} : 0;
+		print "$fid: feature offset=$offset\n" if ($offset and $self->debug);
 		
 		my $aligned_feature = $self->_align_feature
 		(
@@ -134,6 +107,93 @@ sub new
 	return bless($self, $class);
 }
 
+=head2 png
+
+ Title   : png
+ Usage   : $png = $feature_stack->png()
+           OR
+           ($png, $map) = $feature_stack->png(-image_map => 1)
+ Function: Render image in PNG format.
+ Returns : Image in PNG format. Optionally, an HTML image map for the
+           rendered image is returned as second parameter.
+ Args    : -image_map => return image map (true/false) 
+
+=cut
+
+sub png
+{
+	my $self = shift;
+	my %param = @_;
+	my $image_map = defined $param{'-image_map'} ? $param{'-image_map'} : 0;
+	
+	my $panel = Bio::Graphics::Panel->new
+	(
+		-length    => $self->{'span'}+1,
+		-key_style => 'between',
+		@{$self->{'panel_param_array'}}
+	);
+	$self->_render_panel($panel);
+	
+	my $png = $panel->png;
+	
+	if ($image_map)
+	{
+		my $map = $panel->create_web_map();
+		$panel->finished();
+		return ($png, $map);
+	}
+	
+	$panel->finished();
+	return $png;
+}
+
+=head2 svg
+
+ Title   : svg
+ Usage   : $svg = $feature_stack->svg()
+ 		   OR 
+           ($svg, $map) = $feature_stack->svg(-image_map => 1)
+ Function: Render image in SVG format (scalable vectorized image)
+ Returns : Image in SVG format. Optionally, an HTML image map for the
+           rendered image is returned as second parameter.
+ Args    : -image_map => return image map (true/false) 
+
+=cut
+
+sub svg
+{
+	my $self = shift;
+	my %param = @_;
+	my $image_map = defined $param{'-image_map'} ? $param{'-image_map'} : 0;
+	
+	use GD::SVG 0.32;  # minimum version 0.32 for correct color management (sub colorAllocateAlpha)
+	
+	my $panel = Bio::Graphics::Panel->new
+	(
+		-image_class => "SVG",
+		-length    => $self->{'span'}+1,
+		@{$self->{'panel_param_array'}}
+	);
+
+	$self->_render_panel($panel);
+	
+	my $svg = $panel->gd;
+	$svg = _consolidate_svg($svg);
+
+	if ($image_map)
+	{
+		my $map = $panel->create_web_map();
+		$panel->finished();
+		return ($svg, $map);
+	}
+	
+	$panel->finished();
+	return $svg;
+}
+
+#---------------------------------------
+# internal methods
+#---------------------------------------
 sub _get_alt_features
 {
 	my $self = shift;
@@ -173,7 +233,7 @@ sub _calc_start_dist
 	my @transcripts = grep {$_->primary_tag eq 'mRNA'} $f->get_SeqFeatures();
 	if (@transcripts == 0)
 	{
-		print "WARNING: No transcripts found for feature $f (".$f->name.")\n" if (DEBUG);
+		print "WARNING: No transcripts found for feature $f (".$f->name.")\n" if ($self->debug);
 		return undef;
 	}	
 		
@@ -239,14 +299,14 @@ sub _transform_feature
 		 	@parts = sort {$a->start <=> $b->start} $transcript->get_SeqFeatures();
 		}
 		
-		$self->throw("not subfeature found for transcript ".$transcript->id."\n") 
+		$self->throw("not subfeature found for transcript "._get_id($transcript)."\n") 
 			if ($transcript->primary_tag eq 'mRNA' and @parts == 0);
 			
 		foreach my $part (@parts)
 		{
 			if ($self->{'intron_size'} and $part->primary_tag =~ /utr|cds/i)
 			{
-				print "shift_by=$shift_by\n" if (DEBUG == 2);
+#				print "shift_by=$shift_by\n" if ($self->debug);
 				if (defined $last_end)
 				{
 					my $intron_size = $part->start-$last_end;
@@ -324,12 +384,14 @@ sub _calc_feature_span
 	foreach my $feature (@$features_ref)
 	{
 		next if (!defined $feature);
-  		my $span = abs($feature->end - $feature->start + 1);	
-		$span +=  $self->{'feature_offsets'}->{$feature->id} 
-			if (defined $self->{'feature_offsets'} and exists $self->{'feature_offsets'}->{$feature->id});	
+  		my $span = abs($feature->end - $feature->start + 1);
+  		my $fid = _get_id($feature);	
+		$span +=  $self->{'feature_offsets'}->{$fid} 
+			if (defined $self->{'feature_offsets'} and exists $self->{'feature_offsets'}->{$fid});	
 		$max_span = $span if ($span > $max_span);		
 	}
 
+	print "feature span: $max_span\n" if ($self->debug);
 	$self->{'span'} = $max_span;
 
 	return $max_span;	
@@ -355,6 +417,7 @@ sub _calc_feature_offsets
 		# determine maximum offset by decoration position
 		foreach my $feature (@$features_ref)
 		{
+			my $fid = _get_id($feature);
 			my @transcripts;
 			if ($feature->primary_tag eq 'gene')
 			{
@@ -371,10 +434,10 @@ sub _calc_feature_offsets
 				{
 					# align by start codon
 					my @cds = sort {$a->start <=> $b->start} grep {$_->primary_tag eq 'CDS'} $t->get_SeqFeatures();
-					$f_offset{$feature->id} = $cds[0]->start-$feature->start
-						if (!defined $f_offset{$feature->id} or $f_offset{$feature->id} > $cds[0]->start-$feature->start);
+					$f_offset{$fid} = $cds[0]->start-$feature->start
+						if (!defined $f_offset{$fid} or $f_offset{$fid} > $cds[0]->start-$feature->start);
 				}
-				else
+				elsif (defined $feature_offsets)
 				{
 					# align features by decoration
 					# requires Bio::Graphics::Glyph::decorated_transcript for coordinate mapping
@@ -384,10 +447,10 @@ sub _calc_feature_offsets
 					foreach my $decoration (@decorations)
 					{
 						next if ($decoration->name ne $feature_offsets);
-						$f_offset{$feature->id} = $decoration->start - $feature->start; 
+						$f_offset{$fid} = $decoration->start - $feature->start; 
 					}																			
 				}
-				$self->{'max_offset'} = $f_offset{$feature->id} if ($f_offset{$feature->id} > $self->{'max_offset'});
+				$self->{'max_offset'} = $f_offset{$fid} if ($f_offset{$fid} > $self->{'max_offset'});
 			}
 		}
 		
@@ -485,7 +548,7 @@ sub _render_panel
 			-double => 1,
 			-tick   => 2,
 			-relative_coords => $self->{'max_offset'} ? 1 : 0,
-			-relative_coords_offset => -$self->{'max_offset'}
+			-relative_coords_offset => $self->{'max_offset'} ? -$self->{'max_offset'} : undef
 		);		
 	}
 	else
@@ -516,7 +579,7 @@ sub _render_panel
 
 		# add main feature track
 		my $f = $self->{'aligned_features'}->[$i];
-		print "adding track ".$f->name."\n" if (DEBUG);		
+		print "adding track ".$f->name."\n" if ($self->debug);		
 		$panel->add_track
 		(
 			$f,
@@ -537,64 +600,6 @@ sub _render_panel
 			);
 		}		
 	}	
-}
-
-sub png
-{
-	my $self = shift;
-	my %param = @_;
-	my $image_map = defined $param{'-image_map'} ? $param{'-image_map'} : 0;
-	
-	my $panel = Bio::Graphics::Panel->new
-	(
-		-length    => $self->{'span'}+1,
-		-key_style => 'between',
-		@{$self->{'panel_param_array'}}
-	);
-	$self->_render_panel($panel);
-	
-	my $png = $panel->png;
-	
-	if ($image_map)
-	{
-		my $map = $panel->create_web_map();
-		$panel->finished();
-		return ($png, $map);
-	}
-	
-	$panel->finished();
-	return $png;
-}
-
-sub svg
-{
-	my $self = shift;
-	my %param = @_;
-	my $image_map = defined $param{'-image_map'} ? $param{'-image_map'} : 0;
-	
-	use GD::SVG 0.32;  # minimum version 0.32 for correct color management (sub colorAllocateAlpha)
-	
-	my $panel = Bio::Graphics::Panel->new
-	(
-		-image_class => "SVG",
-		-length    => $self->{'span'}+1,
-		@{$self->{'panel_param_array'}}
-	);
-
-	$self->_render_panel($panel);
-	
-	my $svg = $panel->gd;
-	$svg = _consolidate_svg($svg);
-
-	if ($image_map)
-	{
-		my $map = $panel->create_web_map();
-		$panel->finished();
-		return ($svg, $map);
-	}
-	
-	$panel->finished();
-	return $svg;
 }
 
 # agreed, this is a bit of a hack to fix font alignment problems, but GBrowse does the same
@@ -641,54 +646,314 @@ sub _consolidate_svg
 
 
 1;
+
 __END__
-# Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
 
-Bio::Draw::FeatureStack - Perl extension for blah blah blah
+Bio::Draw::FeatureStack - BioPerl module to generate GD images of stacked gene models
 
 =head1 SYNOPSIS
 
+  use Bio::DB::SeqFeature::Store;
   use Bio::Draw::FeatureStack;
-  blah blah blah
+ 
+  # load GFF3-compliant features from GFF file 
+  # features could be obtained from/with any other source/methods as well...
+  #---
+  my @features;
+  my $store = Bio::DB::SeqFeature::Store->new
+  (
+    -adaptor => 'memory',
+    -dsn => 'my_gff_file.gff3' 
+  );    			
+  push(@features, $store->features(-name => 'gene1', -aliases => 1));
+  push(@features, $store->features(-name => 'gene2', -aliases => 1));
 
+  # create FeatureStack, passing features as array-ref
+  #---
+  my $feature_stack = new Bio::Draw::FeatureStack
+  (
+    -features => \@features,    # array-ref of features to be rendered
+    -glyph => 'gene',           # features will be rendered using this BioPerl glyph
+    -flip_minus => 1,           # flip features on reverse strand (default is on)
+    -ignore_utr => 1,           # do not show UTRs (default is off)
+    -panel_params => {          # Bio::Graphics::Panel parameters
+      -width => 1024,          
+      -pad_left => 80,
+      -pad_right => 20,
+      -grid => 1
+    },
+    -glyph_params => {          # glyph-specific parameters (Bio::Graphics::Glyph::gene in this case)
+      -utr_color   => 'white',
+      -label_position => 'left',
+      -label_transcripts => 1,
+      -description => 1
+    }
+  );
+
+  # output SVG, including HTML image map
+  #---
+  (my $svg, $map) = $feature_stack->svg(-image_map => 1);
+	
+  # output PNG
+  #---
+  my $png = $feature_stack->png;
+	
 =head1 DESCRIPTION
 
-Stub documentation for Bio::Draw::FeatureStack, created by h2xs. It looks like the
-author of the extension was negligent enough to leave the stub
-unedited.
+FeatureStack creates GD images of vertically stacked gene models to facilitate visual comparison
+of gene structures. Compared genes can be clusters of orthologous genes,
+gene family members, or any other genes of interest. FeatureStack takes an array of BioPerl
+feature objects as input, projects them onto a common coordinate space, flips features 
+from the negative strand (optional), left-aligns them by start coordinates (optional), sets a 
+fixed intron size (optional), removes unwanted transcripts (optional), and then draws the 
+so transformed features with a user-specified glyph. Internally, this transformation is
+achieved by cloning all input features into L<Bio::Graphics::Feature> objects before the
+features get rendered by the specified glyph. Output images can be generated in SVG 
+(scalable vectorized image) or PNG (rastered image) format. 
 
-Blah blah blah.
+FeatureStack was designed with the goal to retain maximum control of the rendering 
+process. As such, the user can not only control how FeatureStack behaves using the 
+FeatureStack parameters described below, but also can provide both panel- and glyph-specific 
+parameters to fine-control all aspects of the rendered image. 
 
+Albeit FeatureStack can be used in combination with any glyph, it is particularly useful
+when used in combination with the L<Bio::Graphics::Glyph::decorated_gene> glyph. This glyph is 
+currently not distributed with BioPerl, but should install together with FeatureStack. 
+L<Bio::Graphics::Glyph::decorated_gene> can also be used and obtained independent from 
+FeatureStack via CPAN. The decorated_gene glyph allows to highlight protein motifs such as 
+signal peptides, transmembrane domains, or protein domains on top of gene models, 
+which greatly faclitates the comparison of gene structures. Please refer to the documentation
+of L<Bio::Graphics::Glyph::decorated_gene> for more details. If protein decorations are associated 
+with gene features in the input data, FeatureStack can also automatically align gene models 
+by a user-defined decoration type, such that for example gene models are aligned by a 
+particularly well conserved protein motif. 
+
+FeatureStack requires GFF3-complient features. That is, features provided to
+FeatureStack need to have either a two-tier 'mRNA'->'CDS' or three-tier 'gene'->'mRNA'->'CDS' 
+level structure. Here is an example gene structure in GFF3 format compatible with FeatureStack:
+
+   MAL10  test  gene  1596486  1597604  .  +  .  ID=PF10_0392;Name=PF10_0392
+   MAL10  test  mRNA  1596486  1597604  .  +  .  ID=rna_PF10_0392-1;Name=PF10_0392-1;Parent=PF10_0392
+   MAL10  test  CDS   1596486  1596554  .  +  .  ID=cds_PF10_0392-1;Parent=rna_PF10_0392-1
+   MAL10  test  CDS   1596747  1597604  .  +  .  ID=cds_PF10_0392-2;Parent=rna_PF10_0392-1
+
+FeatureStack can display multiple transcripts (isoforms) per gene if the specified 
+glyph supports this as well (for example the 'gene' or the 'decorated_gene' glyph).
+
+In addition to drawing a set of gene models on top of each other, FeatureStack can intermingle
+gene models with alternative tracks that display additional features associated with these genes. 
+This can be used for example to display regulatory elements or sequence variants (SNPs, indels)
+alongside gene model. There is currently no limitation of how these alternative features 
+are displayed, and any BioPerl glyph can be used for this purpose. In the input data, alternative 
+features must be specified one level below the gene or transcript feature that is passed to
+FeatureStack. Here is an example GFF that shows how a regulatory motif (associated with the gene)
+and a SNP (associated with a transcript) can be specified:
+
+   CHR_I  test  gene      5100769  5101677  .  +  .  ID=Gene:Y110A7A.20;Name=ift-20
+   CHR_I  test  promoter  5100709  5100722  .  +  .  ID=Promoter:Y110A7A.20;Note=GTCTCTATAGCAAC;Parent=Gene:Y110A7A.20
+   CHR_I  test  mRNA      5100769  5101677  .  +  .  ID=Transcript:Y110A7A.20;Parent=Gene:Y110A7A.20
+   CHR_I  test  SNP       5100888  5100888  .  +  .  ID=SNP123456;Parent=Transcript:Y110A7A.20;Note=C>T
+   CHR_I  test  CDS       5100769  5101423  .  +  .  ID=CDS:Y110A7A.20:1;Parent=Transcript:Y110A7A.20
+   CHR_I  test  CDS       5101468  5101677  .  +  .  ID=CDS:Y110A7A.20:2;Parent=Transcript:Y110A7A.20
+
+=head2 OPTIONS
+
+  Option          Description                                              Default
+  ------          -----------                                              -------
+
+ -features                                                                 none
+  
+                  Array reference (mandatory). BioPerl features to be 
+                  displayed. Currently, features can be either of type 
+                  'mRNA' or 'gene'. 
+                  
+  -glyph                                                                   'generic'
+
+                  String (optional). Name of glyph to be used to render 
+                  features. The glyph specified here should be suitable 
+                  for rendering the provided features (e.g., use 
+                  'processed_transcript' glyph for features of type 'mRNA' 
+                  and 'gene' glyph for features of type 'gene'). The 
+                  'decorated_gene' or 'decorated_transcript' glyph 
+                  can also be used for highlighting protein features on 
+                  top of gene models (see description above). 
+                  
+                  If no glyph is specified, the 'generic' glyph will 
+                  be used.
+                  
+  -glyph_params                                                            none
+
+                  Hash reference (optional). Glyph-specific parameters. 
+                  Will be passed unmodified to the glyph. Parameters 
+                  can include callback functions for fine-grained control 
+                  of the rendering process. Please refer to the
+                  documentation of the glyph for a description of which
+                  glyph parameters are available. 
+
+  -panel_params                                                            none
+
+                  Hash reference (optional). Panel parameters. Will be 
+                  passed unmodified to the L<Bio::Graphics::Panel> instance 
+                  that is internally created by FeatureStack.  
+
+                  Typical parameters here include -width, -pad_left, 
+                  -pad_right, or -grid (see L<Bio::Graphics::Panel> for
+                  more information).
+
+  -ignore_utr                                                              false
+  
+                  Boolean (optional). If true, gene models will be drawn
+                  without untranslated regions (UTRs).
+                  
+  -flip_minus                                                              true
+  
+                  Boolean (optional). By default, features on the negative
+                  (reverse) strand are drawn flipped, such that the 
+                  5' end of features is always on the left side. This 
+                  behaviour can be turned off by setting this parameter to
+                  0 (false).
+
+  -intron_size                                                             undef
+  
+                  Integer (optional). Intron size in base-pairs. If specified, 
+                  introns of gene models will be transformed to have 
+                  this specified size. This is useful when comparing gene 
+                  models of vastly different sizes due to very large
+                  introns (for example, when comparing protist genes with human 
+                  genes). By default, gene models are drawn to scale with
+                  original intron sizes. This parameter does not affect
+                  the length of exons, which are always drawn to scale.
+                  
+  -feature_offsets                                                         undef
+  
+                  Hash reference or string (optional). This parameter allows 
+                  you to control the horizontal alignment of features. By
+                  default, all features are left-aligned by their start
+                  coordinate.  
+                  
+                  If a hash reference is specified here, it is assumed that
+                  keys correspond to feature IDs and values to offsets in bp. 
+                  This way the alignment of individual features can be 
+                  manually fine-controlled. 
+                  
+                  If 'start_codon' is specified, features will be aligned
+                  by their smallest CDS coordinate, assuming that this
+                  will be the start codon.
+                  
+                  Any other value here will be interpreted as the name of
+                  a protein decoration. In this case, FeatureStack will
+                  attempt to use L<Bio::Graphics::Glyph::decorated_transcript>
+                  to map this protein decoration to nucleotide space and 
+                  will then left-align the feature by this mapped 
+                  coordinate. This way, features can for example be 
+                  automatically aligned by their most conserved protein 
+                  domain. If no protein decoration with this name is found
+                  for a feature, then this feature will not be aligned.
+                  Please refer to the documentation of the 
+                  decorated_transcript glyph to see how protein decorations
+                  can be specified for transcripts.
+
+  -transcripts_to_skip                                                     none
+
+                  Array reference (optional). Contains transcript IDs not to
+                  be included in the output image. This parameter can be used
+                  if a gene feature passed to FeatureStack has multiple 
+                  isoforms but only a subset of these isoforms should appear
+                  in the output.
+  
+  -alt_feature_type                                                        none
+
+                  String (optional). Type and source of alternative features 
+                  (e.g., 'SNP:mpileup') to be outputted alongside gene models. 
+                  FeatureStack looks for features of this type/source one
+                  level below the specified gene/transcript feature. If found, 
+                  alternative features are drawn in a separate track above 
+                  the gene track. The appearance of alternative features 
+                  can be controlled using the -alt_glyph and -alt_glyph_params 
+                  parameters.
+                  
+                  FeatureStack will automatically compute the distance of
+                  alternative features (in bp) to the associated main features's 
+                  start coordinate and adds this distance as a feature tag
+                  (tag name 'start_dist'). This tag can later be read 
+                  by the glyph that displays alternative features. 
+                  This can e.g. be useful for labeling regulatory features 
+                  with their distance from the transcription start site 
+                  (UTRs visible) or from the translation start site 
+                  (UTRs ignored).
+                  
+  -alt_glyph                                                               none
+   
+                  String (optional). Name of glyph to be used to draw 
+                  alternative features specified with -alt_feature_type.
+
+  -alt_glyph_params                                                        none
+
+                  Hash reference (optional). Glyph-specific parameters for 
+                  glyph specified with -alt_glyph. Parameters will be passed 
+                  unmodified to the glyph. Parameters can include callback 
+                  functions for fine-grained control of the rendering process. 
+
+  -ruler                                                                   true
+
+                  Boolean (optional). If true, a ruler indicating distances
+                  in base-pairs will be drawn on top of the image. The ruler
+                  will automatically adjust to feature offsets; that is,
+                  the origin of the ruler will be placed at the
+                  point where features are align, showing negative 
+                  coordinates left of this point and positive coordinates 
+                  right of this point. 
+
+  -span                                                                    [auto]
+
+                  Integer (optional). Span of the output image in bp. By 
+                  default, the span is the length of the longest feature. 
+                  If one wants to generate an image that shows only the 
+                  5' portion of features (for example to visualize only 
+                  the first exon of genes and their associated promoters), 
+                  one can set a smaller, fixed value here, effectively 
+                  clipping the right part of the image at this coordinate.
+
+  -separator                                                               false
+
+                  Boolean (optional). If true, draw horizontal line between
+                  gene models. This might be useful if alternative tracks
+                  are visible to know which alternative track belongs to
+                  which gene model track. 
+                  
 =head2 EXPORT
 
 None by default.
 
+=head1 BUGS
 
+Please report all errors.
 
 =head1 SEE ALSO
 
-Mention other useful documentation such as the documentation of
-related modules or operating system documentation (such as man pages
-in UNIX), or any relevant external documentation such as RFCs or
-standards.
+L<Bio::Graphics::Panel>,
+L<Bio::Graphics::Glyph>,
+L<Bio::Graphics::Glyph::gene>,
+L<Bio::Graphics::Glyph::processed_transcript>,
+L<Bio::Graphics::Glyph::decorated_gene>,
+L<Bio::Graphics::Glyph::decorated_transcript>,
+L<Bio::DB::SeqFeature::Store>
 
-If you have a mailing list set up for your module, mention it here.
-
-If you have a web site set up for your module, mention it here.
-
+It is recommended to study test cases shipped with this module 
+to get additional information of how to use this module.
+ 
 =head1 AUTHOR
 
-A. U. Thor, E<lt>cfa24@localdomainE<gt>
+Christian Frech E<lt>frech.christian@gmail.comE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2012 by A. U. Thor
+Copyright (C) 2012 by Christian Frech
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.8 or,
 at your option, any later version of Perl 5 you may have available.
-
 
 =cut

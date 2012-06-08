@@ -1,25 +1,26 @@
 use strict;
 use warnings;
-use Test::More tests => 5;
+use Test::More tests => 27;
 use Test::Exception;
 
 BEGIN { 
 	use_ok('Bio::Draw::FeatureStack'); 
 	use_ok('Bio::DB::SeqFeature::Store'); 
 	use_ok('Bio::Graphics::Glyph::decorated_gene'); 
-	use_ok('Bio::Graphics::Glyph::decorated_transcript', 0.10); 
+	use_ok('Bio::Graphics::Glyph::decorated_transcript'); 
 	use_ok('Bio::Graphics'); 
 	use_ok('File::Basename'); 
 };
 
-my $gff = 'data/gene_models.gff3';
+my $gff = 't/data/gene_models.gff3';
 
 lives_ok { figure1() }  'Generation of manuscript figure 1';
 lives_ok { figure2() }  'Generation of manuscript figure 2';
+lives_ok { figure3() }  'Generation of manuscript figure 3';
 
 sub figure1
 {
-	my $output_basename = "images/t1/figure1";
+	my $output_basename = "t/images/t1/figure1";
 
 	my @gene_names = (qw (RFX3 RFX2 RFX1 dRFX ceDAF-19 Cbr-daf-19 cRFX1 RFX4 RFX6 cRFX2 RFX8 ACA1_270030 YLR176C RFX5 RFX7 dRFX1 AMAG_11601));
 	#my @gene_names = (qw (dRFX dRFX1 ceDAF-19 YLR176C ACA1_270030 AMAG_10999 AMAG_11601 cRFX1 cRFX2));
@@ -39,7 +40,7 @@ sub figure1
 							-pad_right => 20
 		},
 		-intron_size => 50,
-		-verbose => 1,
+		-verbose => 0,
 		-feature_offsets => "DBD",
 #		-feature_offsets => {
 #			'daf-19' => 800,
@@ -66,7 +67,7 @@ sub figure1
 							-fontcolor   => 'black',
 							-font2color  => 'blue',
 							-utr_color   => 'white',
-							-pad_bottom  => 5,
+#							-pad_bottom  => 10,
 							-height      =>  12,
 							-label_position => 'left',
 							-label_transcripts => 1,
@@ -92,7 +93,7 @@ sub figure1
 
 sub figure2
 {
-	my $output_basename = "images/t1/figure2";
+	my $output_basename = "t/images/t1/figure2";
 	
 	my @gene_names = (qw (ceDAF-19 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 dyf-5));
 #	my @gene_names = (qw (che-13 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nphp-4 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 che-12 dyf-5));
@@ -121,7 +122,7 @@ sub figure2
 							-grid => 1							
 		},
 		-span => 800,  # clips 3' end of gene models
-		-verbose => 1,
+		-verbose => 0,
 		-feature_offsets => 'start_codon',
 		-glyph => 'gene',  # use traditional gene glyph, we do not need transcript decorations for this image
 		-glyph_params => {
@@ -154,6 +155,48 @@ sub figure2
 	write_output_files($feature_stack, $output_basename);
 }
 
+sub figure3
+{
+	my $output_basename = "t/images/t1/figure3";
+
+	my @gene_names = (qw (PF11_0023 PF10_0392 PFA0055c PFC1090w PFF0050c PFF1535w PFI0085c PF14_0743 PFD1205w PFB0950w PFB0953w));
+	my @features = load_features(\@gene_names);
+
+	my $feature_stack = new Bio::Draw::FeatureStack
+	(
+		-features => \@features,
+		-glyph => 'decorated_gene',
+		-flip_minus => 1,
+		-ignore_utr => 1,
+		-panel_params => {
+							-width => 1024,
+							-pad_left => 80,
+							-pad_right => 20,
+							-grid => 1
+		},
+		-verbose => 0,
+		-glyph_params => {
+							-bgcolor     => 'lightgrey',
+							-fgcolor     => 'black',
+							-fontcolor   => 'black',
+							-font2color  => 'blue',
+							-utr_color   => 'white',
+#							-pad_bottom  => 5,
+							-height      =>  12,
+							-label_position => 'left',
+							-label_transcripts => 1,
+							-label => sub { my ($name) = shift->name =~ /(.*)-1$/; return $name ? "$name " : 0; },
+							-description => 1,
+							-decoration_visible => \&is_decoration_visible,
+							-decoration_color => \&get_decoration_color,
+#							-decoration_label => \&get_decoration_label,
+							-decoration_label_color => \&get_decoration_label_color
+						 }
+	);
+
+	write_output_files($feature_stack, $output_basename);
+}
+
 #--------------------------
 # helper functions
 #--------------------------
@@ -166,8 +209,8 @@ sub load_features
 	(
 	   	-adaptor => 'memory',
 		-dsn => $gff 
-	);    						
-
+	);    				
+	
 	my @features;
 	foreach my $name (@$gene_names)
 	{
@@ -250,6 +293,7 @@ sub is_decoration_visible
 	my ($type, $name, $start, $end, $score) = ($h->type, $h->name, $h->start, $h->end, $h->score);
 
 	return 0 if ("$name" eq "RFX_DNA_binding");  # do not show Pfam prediction for the DBD domain, because we annotated it using our own alignment
+	return 0 if ("$type" eq "PfamA25" and $score > 1e-10); # do not show low-quality Pfam predictions
 #	return 0 if ("$name" eq "RFX1_trans_act");
 	
 	return 1;
@@ -259,7 +303,12 @@ sub get_gene_label
 {
 	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
 
-	return $feature->name if ($feature->primary_tag eq 'mRNA');
+	if ($feature->primary_tag eq 'mRNA')
+	{
+		my $label = $feature->name;
+		$label =~ s/-1$//;
+		return $label; 
+	}
 	return $feature->name if ($feature->name and $feature->name eq 'ceDAF-19');
 	return 0;
 }
@@ -291,6 +340,9 @@ sub get_decoration_color
 
 	my %decoration_colors =
 	(
+		'SignalP4:SP' => 'yellow',
+		'exportpred:VTS' => 'darkred',
+		'TMHMM:TM' => 'black',
 		'SEG:LCR' => 'white',
 		'hmmer3:DBD' => 'black',
 		'hmmer3:A-domain' => 'red',
@@ -309,23 +361,7 @@ sub get_decoration_color
 		if (exists $decoration_colors{$name});
 
 	return $decoration_colors{$type} 
-		if (exists $decoration_colors{$type});
-		
-	if ($type eq 'blastp')
-	{
-		if ($h->score < 1e-100)
-		{
-			return "red";
-		}
-		elsif ($h->score < 1)
-		{
-			return "blue";
-		}
-		else
-		{
-			return "black";
-		}
-	}
+		if (exists $decoration_colors{$type});		
 }
 
 sub get_decoration_border
@@ -379,6 +415,17 @@ sub get_decoration_label_position
 #	return "above" if ("$type:$name" eq "hmmer3:BCD-domain");
 	return "inside" if ($name eq "LCR");
 	return "below";
+}
+
+sub get_decoration_label_color
+{
+	my ($feature, $option_name, $part_no, $total_parts, $glyph) = @_;	
+
+	my $h = $glyph->active_decoration;
+	my ($type, $name) = ($h->type, $h->name);
+
+	return "white" if ("$type:$name" eq "TMHMM:TM");
+	return "white" if ("$type:$name" eq "exportpred:VTS");
 }
 
 sub get_decoration_label
