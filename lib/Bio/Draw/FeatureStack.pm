@@ -8,6 +8,8 @@ our $VERSION = '0.01';
 
 use Bio::Graphics::Feature;
 use Bio::Graphics::Panel;
+use GD::SVG 0.32;  # minimum version 0.32 for correct color management (sub colorAllocateAlpha)
+	
 use List::Util qw[min max];
 
 use base qw(Bio::Root::Root);
@@ -139,8 +141,6 @@ sub svg
 	my $self = shift;
 	my %param = @_;
 	my $image_map = defined $param{'-image_map'} ? $param{'-image_map'} : 0;
-	
-	use GD::SVG 0.32;  # minimum version 0.32 for correct color management (sub colorAllocateAlpha)
 	
 	my $panel = Bio::Graphics::Panel->new
 	(
