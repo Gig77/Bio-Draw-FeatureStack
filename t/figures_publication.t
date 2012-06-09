@@ -316,7 +316,8 @@ sub get_gene_label
 sub get_xbox_label
 {
 	my $feature = shift;
-	my ($seq,$len,$score) = $feature->desc =~ /(.*)-Length:(.*)-Score:(.*)/; 
+	my ($desc) = $feature->get_tag_values("Note");
+	my ($seq,$len,$score) = $desc =~ /(.*)-Length:(.*)-Score:(.*)/; 
 	my ($dist) = $feature->get_tag_values('start_dist');  # dynamically computed by FeatureStack; no need to set in GFF file
 	return $seq."(".$dist."bp, ".$score.")";
 }
