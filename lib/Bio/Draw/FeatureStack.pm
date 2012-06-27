@@ -72,8 +72,13 @@ sub new
 	foreach my $feature (@{$features})
 	{
 		$self->throw("feature undefined") if (!defined $feature);
+		
 		my $transformed = $self->_transform_feature($feature);
-		push(@transformed_features, $transformed);
+		push(@transformed_features, $transformed);			
+
+#		use Data::Dumper;
+#		print Dumper($feature);
+					
 	}
 
 	# calculate feature offsets if not left-aligned
@@ -226,6 +231,7 @@ sub _transform_feature
 {
 	my $self = shift;
 	my $feature = shift;
+	my $exon2cds = shift;  # if true, transform exon into cds features
 	
 	my @transcripts;
 	if ($feature->primary_tag eq 'gene')
@@ -264,13 +270,20 @@ sub _transform_feature
 		my @shifted_parts;
 		my @parts;
 		
-		if ($self->{'ignore_utr'})
+		if ($exon2cds)
 		{
-		 	@parts = sort {$a->start <=> $b->start} grep {$_->primary_tag !~ /utr/i} $transcript->get_SeqFeatures();			
+			 	@parts = sort {$a->start <=> $b->start} grep {$_->primary_tag =~ /exon/i} $transcript->get_SeqFeatures();						
 		}
 		else
 		{
-		 	@parts = sort {$a->start <=> $b->start} $transcript->get_SeqFeatures();
+			if ($self->{'ignore_utr'})
+			{
+			 	@parts = sort {$a->start <=> $b->start} grep {$_->primary_tag !~ /utr/i} $transcript->get_SeqFeatures();			
+			}
+			else
+			{
+			 	@parts = sort {$a->start <=> $b->start} $transcript->get_SeqFeatures();
+			}
 		}
 		
 		$self->throw("not subfeature found for transcript "._get_id($transcript)."\n") 
@@ -278,7 +291,7 @@ sub _transform_feature
 			
 		foreach my $part (@parts)
 		{
-			if ($self->{'intron_size'} and $part->primary_tag =~ /utr|cds/i)
+			if ($self->{'intron_size'} and $part->primary_tag =~ /utr|cds|exon/i)
 			{
 #				print "shift_by=$shift_by\n" if ($self->debug);
 				if (defined $last_end)
@@ -294,7 +307,8 @@ sub _transform_feature
 				$part, 
 				($self->{'flip_minus'} and $feature->strand < 1) ? $feature->start + $feature->end - $part->end + $shift_by : $part->start - $shift_by, 
 				($self->{'flip_minus'} and $feature->strand < 1) ? $feature->start + $feature->end - $part->start + $shift_by : $part->end - $shift_by,
-				$self->{'flip_minus'} ? 1 : undef
+				$self->{'flip_minus'} ? 1 : undef,
+				$exon2cds
 			);		
 			push(@shifted_parts, $f);
 		}
@@ -309,7 +323,8 @@ sub _transform_feature
 			@shifted_parts > 0 ? $shifted_parts[@shifted_parts-1]->end 
 							   : ($self->{'flip_minus'} and $feature->strand < 1) ? $feature->start + $feature->end - $transcript->start 
 							                                                      : $transcript->end,
-			$self->{'flip_minus'} ? 1 : undef
+			$self->{'flip_minus'} ? 1 : undef,
+			$exon2cds			
 		);
 		foreach my $c (@shifted_parts)
 		{
@@ -326,7 +341,8 @@ sub _transform_feature
 			$feature, 
 			$shifted_transcripts[0]->start,
 			$shifted_transcripts[@shifted_transcripts-1]->end, 
-			$self->{'flip_minus'} ? 1 : undef
+			$self->{'flip_minus'} ? 1 : undef,
+			$exon2cds
 		);
 		foreach my $i (@shifted_transcripts)
 		{
@@ -342,9 +358,11 @@ sub _get_id
 {
 	my $feature = shift;
 	
-	my ($id) = $feature->get_tag_values('ID');
-	($id) = $feature->get_tag_values('load_id') if (!$id);
-	$id = $feature->id if ($feature->can('id') and !$id);
+	my $id;
+	($id) = $feature->get_tag_values('ID') if ($feature->has_tag('ID'));
+	($id) = $feature->get_tag_values('load_id') if (!$id and $feature->has_tag('load_id'));
+	$id = $feature->id if (!$id and $feature->can('id'));
+	$id = $feature->seq_id.":".$feature->start."..".$feature->end if (!$id);
 	
 	return $id;
 }
@@ -408,6 +426,7 @@ sub _calc_feature_offsets
 				{
 					# align by start codon
 					my @cds = sort {$a->start <=> $b->start} grep {$_->primary_tag eq 'CDS'} $t->get_SeqFeatures();
+					@cds = sort {$a->start <=> $b->start} grep {$_->primary_tag eq 'exon'} $t->get_SeqFeatures() if (@cds == 0);
 					$f_offset{$fid} = $cds[0]->start-$feature->start
 						if (!defined $f_offset{$fid} or $f_offset{$fid} > $cds[0]->start-$feature->start);
 				}
@@ -470,13 +489,20 @@ sub _clone_feature
 	my $start = shift;
 	my $end = shift;
 	my $strand = shift;
+	my $exon2cds = shift;
 	
 	my $clone = Bio::Graphics::Feature->new
 	(
-		-name => $feature->can("display_name") ? $feature->display_name : $feature->name,
+		-name => ($feature->can("display_name") and $feature->display_name)
+				 ? $feature->display_name 
+				 : ($feature->can("name") and $feature->name) 
+				   ? $feature->name
+				   : ($feature->can("seq") and $feature->seq) 
+				     ? $feature->seq->accession_number
+				     : "",
 		-seq_id => $feature->seq_id,
-		-source => $feature->source,
-		-primary_tag => $feature->primary_tag,
+		-source => $feature->can('source_tag') ? $feature->source_tag : $feature->source,
+		-primary_tag => ($exon2cds and $feature->primary_tag eq 'exon') ? 'CDS' : $feature->primary_tag,
 		-start => $start ? $start : $feature->start,
 		-end => $end ? $end : $feature->end,
 		-score => $feature->score,
@@ -498,8 +524,15 @@ sub _clone_feature
 		}
 	}
 
-	my ($id) = $feature->get_tag_values('ID');
-	($id) = $feature->get_tag_values('load_id') if (!$id);
+	# add description for genbank/embl entries, depending on which information is available
+	$clone->add_tag_value('Note', $clone->get_tag_values("product"))
+		if (!$clone->has_tag("Note") and !$clone->has_tag("note") and $clone->has_tag("product"));
+	$clone->add_tag_value('Note', $clone->get_tag_values("gene"))
+		if (!$clone->has_tag("Note") and !$clone->has_tag("note") and $clone->has_tag("gene"));
+	$clone->add_tag_value('Note', $feature->seq->desc)
+		if (!$clone->has_tag("Note") and !$clone->has_tag("note") and $feature->can("seq") and $feature->seq and $feature->seq->desc);
+		
+	my $id = _get_id($feature);
 	$clone->add_tag_value('ID', $id) if ($id);
 
 	return ($clone, $id);	
@@ -814,7 +847,7 @@ and a SNP (associated with a transcript) can be specified:
                   
                   If 'start_codon' is specified, features will be aligned
                   by their smallest CDS coordinate, assuming that this
-                  will be the start codon.
+                  will be the translation start site.
                   
                   Any other value here will be interpreted as the name of
                   a protein decoration. In this case, FeatureStack will
