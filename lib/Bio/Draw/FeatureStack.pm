@@ -507,8 +507,8 @@ sub _clone_feature
 		-end => $end ? $end : $feature->end,
 		-score => $feature->score,
 		-strand => defined $strand ? $strand : $feature->strand,
-		-frame => $feature->phase,
-		-phase => $feature->phase
+		-frame => $feature->can('phase') ? $feature->phase : "",
+		-phase => $feature->can('phase') ? $feature->phase : ""
 	);			
 
 	# copy tags
