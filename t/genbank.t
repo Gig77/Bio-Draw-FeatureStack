@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 9;
+use Test::More tests => 10;
 use Test::Exception;
 
 BEGIN { 
@@ -11,12 +11,11 @@ BEGIN {
 	use_ok('Bio::Graphics::Glyph::decorated_gene'); 
 	use_ok('Bio::Graphics::Glyph::decorated_transcript'); 
 	use_ok('Bio::Graphics'); 
-	use_ok('Bio::DB::GenBank');
-	use_ok('File::Basename');
+	use_ok('Bio::SeqIO;');
 	use_ok('Bio::SeqFeature::Tools::Unflattener'); 
 };
 
-my $gff = 't/data/gene_models.gff3';
+#my $gff = 't/data/gene_models.gff3';
 
 lives_ok { figure1() }  'Generation of genbank figure';
 
@@ -24,7 +23,7 @@ sub figure1
 {
 	my $output_basename = "t/images/genbank";
 	
-	my @gene_names = (qw (AH013929.2 Z48783.1));
+	my @gene_names = (qw (t/data/genbank_file1.gb)); #AH013929.2 Z48783.1 
 
 	my @features = load_features(\@gene_names);
 
@@ -63,23 +62,24 @@ sub load_features
 	my $gene_names = shift;
 
 	my @features;
-	
-	my $db_obj = Bio::DB::GenBank->new;
+		
 	my $unflattener = Bio::SeqFeature::Tools::Unflattener->new;
-
-	foreach my $name (@$gene_names)
-	{
-		my $seq = $db_obj->get_Seq_by_acc($name);
-
+	
+	foreach my $name (@$gene_names){
+		my $db_obj = Bio::SeqIO->new(-file=>"$name",
+                    -format=>'Genbank');
+                   
+	while (my $seq = $db_obj->next_seq()) {
+		
 		if (!defined $seq)
 		{
-			die "could not load sequence $name from genbank; maybe no internet connection?\n";
+			die "error in sequence of file\n";
 			return ();
 		}
 
 		# unflatten flat genbank features into hierarchical gene structure		
 	  	$unflattener->unflatten_seq(-seq => $seq, -use_magic => 1);
-	  	
+	  	     
 	  	# grep gene and mRNA top-level features
 		my @f = grep { $_->primary_tag =~ /(gene|mRNA)/ } $seq->top_SeqFeatures;
 		
@@ -89,7 +89,7 @@ sub load_features
 		
 		push(@features, @f);
 	}
-	
+	}
 	return @features;
 }		
 
