@@ -4,7 +4,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 10;
+use Test::More tests => 9;
 use Test::Exception;
 
 BEGIN { 
@@ -15,7 +15,7 @@ BEGIN {
 	use_ok('Bio::Graphics'); 
 };
 
-my $gff = 't/data/gene_models.gff3';
+my $gff = 't/data/gene_models_manuscript.gff3';
 
 lives_ok { figure1() }  'Generation of test figure 10 and 11';
 

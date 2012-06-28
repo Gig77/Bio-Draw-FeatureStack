@@ -1,4 +1,4 @@
-##test case for genbank data source
+##test case using genbank as data source
 
 use strict;
 use warnings;
@@ -10,12 +10,13 @@ BEGIN {
 	use_ok('Bio::DB::SeqFeature::Store'); 
 	use_ok('Bio::Graphics::Glyph::decorated_gene'); 
 	use_ok('Bio::Graphics::Glyph::decorated_transcript'); 
-	use_ok('Bio::Graphics'); 
-	use_ok('Bio::SeqIO;');
+	use_ok('Bio::Graphics');
+	{
+		local $SIG{__WARN__} = sub { };  # suppress some strange warning of use statement...
+		use_ok('Bio::SeqIO;');	
+	} 
 	use_ok('Bio::SeqFeature::Tools::Unflattener'); 
 };
-
-#my $gff = 't/data/gene_models.gff3';
 
 lives_ok { figure1() }  'Generation of genbank figure';
 
@@ -65,30 +66,30 @@ sub load_features
 		
 	my $unflattener = Bio::SeqFeature::Tools::Unflattener->new;
 	
-	foreach my $name (@$gene_names){
-		my $db_obj = Bio::SeqIO->new(-file=>"$name",
-                    -format=>'Genbank');
+	foreach my $name (@$gene_names)
+	{
+		my $db_obj = Bio::SeqIO->new(-file=>"$name", -format=>'Genbank');			
                    
-	while (my $seq = $db_obj->next_seq()) {
-		
-		if (!defined $seq)
-		{
-			die "error in sequence of file\n";
-			return ();
+		while (my $seq = $db_obj->next_seq()) {
+			
+			if (!defined $seq)
+			{
+				die "error in sequence of file\n";
+				return ();
+			}
+	
+			# unflatten flat genbank features into hierarchical gene structure
+		  	$unflattener->unflatten_seq(-seq => $seq, -use_magic => 1);				
+		  	     
+		  	# grep gene and mRNA top-level features
+			my @f = grep { $_->primary_tag =~ /(gene|mRNA)/ } $seq->top_SeqFeatures;
+			
+			# let's add some dummy decorations to first transcript...
+			my $mrna = $f[0]->primary_tag eq 'mRNA' ? $f[0] : (grep { $_->primary_tag eq 'mRNA' } $f[0]->get_SeqFeatures)[0];
+			$mrna->add_tag_value('protein_decorations', 'dummy:dummy:10:50:0') if ($mrna); 
+			
+			push(@features, @f);
 		}
-
-		# unflatten flat genbank features into hierarchical gene structure		
-	  	$unflattener->unflatten_seq(-seq => $seq, -use_magic => 1);
-	  	     
-	  	# grep gene and mRNA top-level features
-		my @f = grep { $_->primary_tag =~ /(gene|mRNA)/ } $seq->top_SeqFeatures;
-		
-		# let's add some dummy decorations to first transcript...
-		my $mrna = $f[0]->primary_tag eq 'mRNA' ? $f[0] : (grep { $_->primary_tag eq 'mRNA' } $f[0]->get_SeqFeatures)[0];
-		$mrna->add_tag_value('protein_decorations', 'dummy:dummy:10:50:0') if ($mrna); 
-		
-		push(@features, @f);
-	}
 	}
 	return @features;
 }		

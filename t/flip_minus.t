@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 16;
+use Test::More tests => 15;
 use Test::Exception;
 
 BEGIN { 
@@ -13,7 +13,7 @@ BEGIN {
 	use_ok('Bio::Graphics'); 
 };
 
-my $gff = 't/data/gene_models.gff3';
+my $gff = 't/data/gene_models_manuscript.gff3';
 
 lives_ok { figure1() }  'Generation of flip_minus figures';
 

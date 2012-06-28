@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 9;
+use Test::More tests => 11;
 use Test::Exception;
 
 BEGIN { 
@@ -13,13 +13,13 @@ BEGIN {
 	use_ok('Bio::Graphics'); 
 };
 
-my $gff = 't/data/gene_models.gff3';
+my $gff = 't/data/gene_models_manuscript.gff3';
 
 lives_ok { figure1() }  'Generation of ruler test';
 
 sub figure1
 {
-	my $output_basename = "t/images/t1/test_fig2";
+	my $output_basename = "t/images/ruler";
 	
 	my @gene_names = (qw (PF11_0023 PF10_0392));
 

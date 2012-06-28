@@ -12,7 +12,7 @@ BEGIN {
 	use_ok('File::Basename'); 
 };
 
-my $gff = 't/data/gene_models.gff3';
+my $gff = 't/data/gene_models_manuscript.gff3';
 
 lives_ok { figure1() }  'Generation of manuscript figure 1';
 lives_ok { figure2() }  'Generation of manuscript figure 2';
@@ -20,7 +20,7 @@ lives_ok { figure3() }  'Generation of manuscript figure 3';
 
 sub figure1
 {
-	my $output_basename = "t/images/t1/figure1";
+	my $output_basename = "t/images/manuscript_figure1";
 
 	my @gene_names = (qw (RFX3 RFX2 RFX1 dRFX ceDAF-19 Cbr-daf-19 cRFX1 RFX4 RFX6 cRFX2 RFX8 ACA1_270030 YLR176C RFX5 RFX7 dRFX1 AMAG_11601));
 	#my @gene_names = (qw (dRFX dRFX1 ceDAF-19 YLR176C ACA1_270030 AMAG_10999 AMAG_11601 cRFX1 cRFX2));
@@ -93,11 +93,9 @@ sub figure1
 
 sub figure2
 {
-	my $output_basename = "t/images/t1/figure2";
+	my $output_basename = "t/images/manuscript_figure2";
 	
 	my @gene_names = (qw (ceDAF-19 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 dyf-5));
-#	my @gene_names = (qw (che-13 xbx-1 dylt-2 xbx-3 xbx-4 xbx-5 xbx-6 mks-1 ZK328.7 bbs-9 che-11 odr-4 osm-5 nhr-44 nphp-1 nphp-4 nud-1 dyf-2 osm-6 dyf-3 che-2 osm-1 bbs-1 bbs-2 bbs-5 osm-12 bbs-8 tub-1 che-12 dyf-5));
-#	my @gene_names = (qw (xbx-1 dylt-2 xbx-3 xbx-4 mks-1 bbs-9 osm-5 nhr-44 dyf-5));
 	my @features = load_features(\@gene_names);
 
 	my $feature_stack = new Bio::Draw::FeatureStack
@@ -157,7 +155,7 @@ sub figure2
 
 sub figure3
 {
-	my $output_basename = "t/images/t1/figure3";
+	my $output_basename = "t/images/manuscript_figure3";
 
 	my @gene_names = (qw (PF11_0023 PF10_0392 PFA0055c PFC1090w PFF0050c PFF1535w PFI0085c PF14_0743 PFD1205w PFB0950w PFB0953w));
 	my @features = load_features(\@gene_names);
@@ -210,7 +208,7 @@ sub load_features
 	   	-adaptor => 'memory',
 		-dsn => $gff 
 	);    				
-	
+
 	my @features;
 	foreach my $name (@$gene_names)
 	{
@@ -223,7 +221,7 @@ sub load_features
 		
 		push(@features, $f);	
 	}
-	
+
 	return @features;
 }
 
