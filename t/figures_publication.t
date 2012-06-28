@@ -109,7 +109,7 @@ sub figure2
 									Transcript:ZK328.7b
 									Transcript:Y102E9.1a.2 Transcript:Y102E9.1a.3 Transcript:Y102E9.1a.4 Transcript:Y102E9.1b Transcript:Y102E9.1c
 									Transcript:F53A2.4.2
-									Transcript:C04C3.5b Transcript:C04C3.5c
+									Transcript:C04C3.5a Transcript:C04C3.5c
 									Transcript:F38G1.1.2
 									Transcript:ZK520.3b.1 Transcript:ZK520.3b.2)],
 		-alt_feature_type => 'xbox:test',  # specifiy feature types that should be drawn in alternative track alongside gene models; could also be SNPs, indels, etc.
@@ -121,7 +121,7 @@ sub figure2
 							-pad_right => 20,
 							-grid => 1							
 		},
-		-span => 800,  # clips 3' end of gene models
+		-span => 500,  # clips 3' end of gene models
 		-verbose => 0,
 		-feature_offsets => 'start_codon',
 		-glyph => 'gene',  # use traditional gene glyph, we do not need transcript decorations for this image
