@@ -497,7 +497,7 @@ sub _clone_feature
 				 ? $feature->display_name 
 				 : ($feature->can("name") and $feature->name) 
 				   ? $feature->name
-				   : ($feature->can("seq") and $feature->seq) 
+				   : (ref($feature) eq "Bio::Seq::RichSeq" and $feature->can("seq") and $feature->seq) # special case for features loaded from genbank entries
 				     ? $feature->seq->accession_number
 				     : "",
 		-seq_id => $feature->seq_id,
@@ -530,7 +530,7 @@ sub _clone_feature
 	$clone->add_tag_value('Note', $clone->get_tag_values("gene"))
 		if (!$clone->has_tag("Note") and !$clone->has_tag("note") and $clone->has_tag("gene"));
 	$clone->add_tag_value('Note', $feature->seq->desc)
-		if (!$clone->has_tag("Note") and !$clone->has_tag("note") and $feature->can("seq") and $feature->seq and $feature->seq->desc);
+		if (!$clone->has_tag("Note") and !$clone->has_tag("note") and ref($feature) eq "Bio::Seq::RichSeq" and $feature->can("seq") and $feature->seq and $feature->seq->desc);
 		
 	my $id = _get_id($feature);
 	$clone->add_tag_value('ID', $id) if ($id);
@@ -599,7 +599,7 @@ sub _render_panel
 		{	
 			$panel->add_track
 			(
-				Bio::SeqFeature::Generic->new(-start => 1, -end => $self->{'span'}),
+				Bio::Graphics::Feature->new(-start => 1, -end => $self->{'span'}),
 				-glyph  => 'line',
 				-height => 1,
 				-fgcolor => 'black',
