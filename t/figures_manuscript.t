@@ -122,7 +122,7 @@ sub figure2
 		-span => 500,  # clips 3' end of gene models
 		-verbose => 0,
 		-feature_offsets => 'start_codon',
-		-glyph => 'gene',  # use traditional gene glyph, we do not need transcript decorations for this image
+		-glyph => 'decorated_gene',  
 		-glyph_params => {
 							-bgcolor     => 'lightgrey',
 							-fgcolor     => 'black',
