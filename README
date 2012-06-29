@@ -1,4 +1,4 @@
-Bio-Draw-FeatureStack version 0.01
+Bio-Draw-FeatureStack version 0.02
 ==================================
 
 FeatureStack creates GD images of vertically stacked gene models to facilitate visual comparison
@@ -28,6 +28,7 @@ This module requires these other modules and libraries:
   Bio::Graphics
   Bio::Graphics::Glyph::decorated_gene
   GD::SVG (version 0.32)
+  Test::Exception
   
 COPYRIGHT AND LICENCE
 
